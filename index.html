@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRMTR — Container Resource Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="root">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-left">
+      <div class="brand"><div class="logo">CRMTR</div><div class="logo-sub">Resource Monitor v5</div></div>
+      <div class="divider"></div>
+      <div class="env-pill"><div class="live-dot" id="live-dot"></div><span id="env-txt">Connecting…</span></div>
+      <div class="mini-stats" id="mini-stats"></div>
+    </div>
+    <div class="tb-right">
+      <div class="time-display" id="clock"></div>
+      <div class="uptime-display">UP <span id="uptime">00:00:00</span></div>
+      <button class="btn" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn" onclick="togglePause()" id="pause-btn">[ PAUSE ]</button>
+    </div>
+  </div>
+
+  <!-- Docker error banner -->
+  <div id="docker-err-banner" style="display:none;padding:7px 20px;background:rgba(255,61,61,.1);border-bottom:1px solid rgba(255,61,61,.3);font-family:var(--mono);font-size:10px;color:#ff3d3d;letter-spacing:.5px;align-items:center;gap:8px;flex-shrink:0"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('overview')"   id="tab-overview">  <span class="tab-icon">◈</span>OVERVIEW</button>
+    <button class="tab"        onclick="showTab('charts')"     id="tab-charts">    <span class="tab-icon">◱</span>LIVE CHARTS</button>
+    <button class="tab"        onclick="showTab('containers')" id="tab-containers"><span class="tab-icon">◫</span>CONTAINERS</button>
+    <button class="tab"        onclick="showTab('alerts')"     id="tab-alerts">    <span class="tab-icon">◬</span>ALERTS <span class="alert-badge" id="abadge" style="display:none">0</span></button>
+    <button class="tab"        onclick="showTab('predict')"    id="tab-predict">   <span class="tab-icon">◎</span>PREDICTION</button>
+    <button class="tab"        onclick="showTab('health')"     id="tab-health">    <span class="tab-icon">◉</span>HEALTH</button>
+    <button class="tab"        onclick="showTab('heatmap')"    id="tab-heatmap">   <span class="tab-icon">▦</span>HEATMAP</button>
+    <button class="tab"        onclick="showTab('network')"    id="tab-network">   <span class="tab-icon">◎</span>NETWORK</button>
+    <button class="tab"        onclick="showTab('inspector')"  id="tab-inspector"> <span class="tab-icon">◐</span>INSPECTOR</button>
+    <button class="tab"        onclick="showTab('cicd')"       id="tab-cicd">       <span class="tab-icon">⚙</span>CI/CD <span class="alert-badge" id="cicd-badge" style="display:none;background:#ff6b35">!</span></button>
+  </div>
+
+  <div class="main">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header"><span>CONTAINERS</span><span id="c-count" style="color:var(--cpu)">0</span></div>
+      <div id="clist"></div>
+    </div>
+
+    <div class="content">
+
+      <!-- OVERVIEW -->
+      <div class="panel active" id="panel-overview">
+        <div class="metrics-grid" id="m-grid"></div>
+        <div>
+          <div class="sec-head"><span class="sec-title">Realtime telemetry · 30s window</span><span class="sec-action" id="tick-disp">tick 0</span></div>
+          <div class="charts-row">
+            <div class="chart-box"><div class="ch-head"><span class="ch-title" style="color:var(--cpu)">· CPU UTIL</span><span class="ch-val" id="cv-cpu" style="color:var(--cpu)">—%</span></div><div class="sparkwrap" id="sp-cpu"><div class="sp-line"></div></div></div>
+            <div class="chart-box"><div class="ch-head"><span class="ch-title" style="color:var(--mem)">· MEMORY</span><span class="ch-val" id="cv-mem" style="color:var(--mem)">—%</span></div><div class="sparkwrap" id="sp-mem"><div class="sp-line"></div></div></div>
+            <div class="chart-box"><div class="ch-head"><span class="ch-title" style="color:var(--net)">· NETWORK I/O</span><span class="ch-val" id="cv-net" style="color:var(--net)">— MB/s</span></div><div class="sparkwrap" id="sp-net"><div class="sp-line"></div></div></div>
+            <div class="chart-box"><div class="ch-head"><span class="ch-title" style="color:var(--disk)">· DISK I/O</span><span class="ch-val" id="cv-disk" style="color:var(--disk)">— MB/s</span></div><div class="sparkwrap" id="sp-disk"><div class="sp-line"></div></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="sec-head"><span class="sec-title">Active alerts</span></div>
+          <div style="display:flex;flex-direction:column;gap:6px" id="ov-alerts"></div>
+        </div>
+        <div>
+          <div class="sec-head"><span class="sec-title">Optimization suggestions</span></div>
+          <div id="ov-suggestions" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+
+      <!-- LIVE CHARTS -->
+      <div class="panel" id="panel-charts">
+        <div class="sec-head">
+          <span class="sec-title">Historical resource usage · auto-refresh 2s</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:9px;font-family:var(--mono);color:var(--t3)">Container:</span>
+            <select id="chart-container-sel" class="chart-sel" onchange="rebuildCharts()"></select>
+            <span style="font-size:9px;font-family:var(--mono);color:var(--t3)">Window:</span>
+            <select id="chart-window-sel" class="chart-sel" onchange="rebuildCharts()">
+              <option value="30">30s</option><option value="60" selected>60s</option>
+              <option value="120">2m</option><option value="300">5m</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-full-grid">
+          <div class="chart-full-box"><div class="ch-head"><span class="ch-title" style="color:var(--cpu)">· CPU UTILIZATION (%)</span><span class="ch-val" id="chart-cpu-val" style="color:var(--cpu)">—</span></div><div style="position:relative;height:160px"><canvas id="chart-cpu"></canvas></div></div>
+          <div class="chart-full-box"><div class="ch-head"><span class="ch-title" style="color:var(--mem)">· MEMORY USAGE (%)</span><span class="ch-val" id="chart-mem-val" style="color:var(--mem)">—</span></div><div style="position:relative;height:160px"><canvas id="chart-mem"></canvas></div></div>
+          <div class="chart-full-box"><div class="ch-head"><span class="ch-title" style="color:var(--net)">· NETWORK I/O (MB/s)</span><span class="ch-val" id="chart-net-val" style="color:var(--net)">—</span></div><div style="position:relative;height:160px"><canvas id="chart-net"></canvas></div></div>
+          <div class="chart-full-box"><div class="ch-head"><span class="ch-title" style="color:var(--disk)">· DISK I/O (MB/s)</span><span class="ch-val" id="chart-disk-val" style="color:var(--disk)">—</span></div><div style="position:relative;height:160px"><canvas id="chart-disk"></canvas></div></div>
+        </div>
+        <div>
+          <div class="sec-head"><span class="sec-title">Fleet CPU comparison · all containers</span></div>
+          <div class="chart-full-box"><div style="position:relative;height:180px"><canvas id="chart-fleet"></canvas></div></div>
+        </div>
+      </div>
+
+      <!-- CONTAINERS -->
+      <div class="panel" id="panel-containers">
+        <div class="cont-grid" id="cont-grid"></div>
+      </div>
+
+      <!-- ALERTS -->
+      <div class="panel" id="panel-alerts">
+        <div class="sec-head">
+          <span class="sec-title">All alerts</span>
+          <div style="display:flex;gap:10px;align-items:center">
+            <span id="alert-summary-txt" style="font-size:9px;font-family:var(--mono);color:var(--t3)"></span>
+            <button class="sec-action" onclick="clearAlerts()">CLEAR ALL</button>
+          </div>
+        </div>
+        <div class="alert-rule-box"><div class="sec-title" style="margin-bottom:10px">Alert rules</div><div class="rule-grid" id="rule-grid"></div></div>
+        <div style="display:flex;flex-direction:column;gap:6px" id="all-alerts"></div>
+      </div>
+
+      <!-- PREDICTION -->
+      <div class="panel" id="panel-predict">
+        <div class="sec-head"><span class="sec-title">Predictive resource monitoring</span><span style="font-size:9px;font-family:var(--mono);color:var(--t3)">2 ML models · 30s lookahead</span></div>
+        <div class="pred-grid" id="pred-grid"></div>
+        <div class="model-compare-row" id="model-compare-row"></div>
+        <div>
+          <div class="sec-head"><span class="sec-title">Model forecast charts · CPU %</span><select id="pred-container-sel" class="chart-sel" onchange="rebuildPredictChart()"></select></div>
+          <div class="pred-charts-row">
+            <div class="chart-full-box">
+              <div class="ch-head"><span class="ch-title" style="color:#00d4ff">· MODEL 1 — LINEAR REGRESSION (OLS)</span><span class="model-badge model-lr">OLS</span></div>
+              <div class="model-desc">Fits a straight line through all history using least-squares. Best for steady trends. ŷ = β₀ + β₁x</div>
+              <div style="position:relative;height:190px"><canvas id="chart-predict-lr"></canvas></div>
+            </div>
+            <div class="chart-full-box">
+              <div class="ch-head"><span class="ch-title" style="color:#b06cff">· MODEL 2 — EXPONENTIAL MOVING AVG (EMA)</span><span class="model-badge model-ema">EMA</span></div>
+              <div class="model-desc">Weights recent values using decay α=0.3. Reacts faster to spikes. EMAₜ = α·xₜ + (1-α)·EMAₜ₋₁</div>
+              <div style="position:relative;height:190px"><canvas id="chart-predict-ema"></canvas></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="sec-head"><span class="sec-title">Historical data log</span><span style="font-size:9px;font-family:var(--mono);color:var(--t3)" id="hist-count"></span></div>
+          <div class="hist-table-wrap">
+            <table class="hist-table">
+              <thead><tr><th>Container</th><th>Timestamp</th><th>CPU %</th><th>Mem %</th><th>Net MB/s</th><th>Disk MB/s</th><th>OLS Pred</th><th>EMA Pred</th></tr></thead>
+              <tbody id="hist-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- HEALTH DASHBOARD -->
+      <div class="panel" id="panel-health">
+        <div class="sec-head"><span class="sec-title">Container health scorecard</span><span style="font-size:9px;font-family:var(--mono);color:var(--t3)">Live · updates every 2s</span></div>
+        <div class="health-grid" id="health-grid"></div>
+        <div style="margin-top:16px">
+          <div class="sec-head"><span class="sec-title">Lifecycle events</span><span class="sec-action" onclick="clearEvents()">CLEAR</span></div>
+          <div class="ev-stream" id="event-stream"><div style="color:var(--t3);font-family:var(--mono);font-size:10px;padding:20px;text-align:center">Listening for container start/stop/crash events…</div></div>
+        </div>
+      </div>
+
+      <!-- HEATMAP -->
+      <div class="panel" id="panel-heatmap">
+        <div class="sec-head"><span class="sec-title">CPU intensity heatmap · time × container</span><span style="font-size:9px;font-family:var(--mono);color:var(--t3)">Each cell = one 2s sample. Darker = higher CPU.</span></div>
+        <div class="heatmap-legend"><span style="color:var(--t3);font-family:var(--mono);font-size:9px">LOW</span><div class="heatmap-scale"></div><span style="color:var(--t3);font-family:var(--mono);font-size:9px">HIGH</span></div>
+        <div id="heatmap-wrap"></div>
+      </div>
+
+      <!-- NETWORK TOPOLOGY -->
+      <div class="panel" id="panel-network">
+        <div class="sec-head"><span class="sec-title">Network topology</span><button class="sec-action" onclick="loadNetworkTopology()">↻ REFRESH</button></div>
+        <div id="network-wrap"><div style="color:var(--t3);font-family:var(--mono);font-size:10px;padding:40px;text-align:center">Click REFRESH to load network topology</div></div>
+      </div>
+
+      <!-- CONTAINER INSPECTOR -->
+      <div class="panel" id="panel-inspector">
+        <div class="sec-head">
+          <span class="sec-title">Container inspector</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="inspector-sel" class="chart-sel" onchange="loadInspector()"></select>
+            <button class="sec-action" onclick="loadInspector()">↻ INSPECT</button>
+          </div>
+        </div>
+        <div id="inspector-wrap"><div style="color:var(--t3);font-family:var(--mono);font-size:10px;padding:40px;text-align:center">Select a container above to inspect it</div></div>
+      </div>
+
+      <!-- CI/CD PIPELINE -->
+      <div class="panel" id="panel-cicd">
+        <div class="sec-head">
+          <span class="sec-title">CI/CD Pipeline status</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:9px;font-family:var(--mono);color:var(--t3)" id="cicd-last-updated"></span>
+            <button class="sec-action" onclick="loadCICD()">REFRESH</button>
+          </div>
+        </div>
+        <div class="cicd-info-banner">
+          <span class="cicd-info-icon">CONNECTED</span>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--t1);font-weight:700;margin-bottom:3px">Jenkins and GitHub Actions Integration</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--t3)">Pipelines POST their status to /api/cicd — CRMTR reads and displays it here</div>
+          </div>
+        </div>
+        <div class="cicd-grid" id="cicd-grid"></div>
+        <div style="margin-top:16px">
+          <div class="sec-head"><span class="sec-title">Recent build history</span><span id="cicd-build-count" style="font-size:9px;font-family:var(--mono);color:var(--t3)"></span></div>
+          <div class="cicd-timeline" id="cicd-timeline"></div>
+        </div>
+        <div style="margin-top:16px">
+          <div class="sec-head"><span class="sec-title">How to connect your pipeline</span></div>
+          <div class="cicd-setup-grid">
+            <div class="cicd-setup-card">
+              <div class="cicd-setup-title"><span class="cicd-badge-jenkins">JENKINS</span> Add to Jenkinsfile</div>
+              <div class="cicd-code">post { always { sh "curl -X POST http://localhost:3000/api/cicd -H Content-Type:application/json -d {tool:Jenkins,pipeline:${env.JOB_NAME},status:${currentBuild.result},branch:${env.GIT_BRANCH}}" } }</div>
+            </div>
+            <div class="cicd-setup-card">
+              <div class="cicd-setup-title"><span class="cicd-badge-gha">GITHUB ACTIONS</span> Add workflow step</div>
+              <div class="cicd-code">- name: Notify CRMTR if: always() run: curl -X POST http://localhost:3000/api/cicd -H Content-Type:application/json -d {tool:GitHub Actions,pipeline:${{github.workflow}},status:${{job.status}},branch:${{github.ref_name}}}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

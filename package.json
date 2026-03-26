@@ -1,0 +1,15 @@
+{
+  "name": "crmtr",
+  "version": "2.0.0",
+  "description": "Container Resource Monitor — dark cyberpunk dashboard with AI analysis",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} node server.js"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": ["containers", "monitoring", "docker", "kubernetes", "devops"],
+  "license": "MIT"
+}
