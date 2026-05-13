@@ -164,8 +164,7 @@ crmtr/
 ### Run it
 
 ```bash
-# 1. Clone
-git clone https://github.com/YOUR_USERNAME/crmtr.git
+# 1. Clone the github repo
 cd crmtr
 
 # 2. Start some containers to monitor
