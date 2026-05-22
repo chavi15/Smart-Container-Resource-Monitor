@@ -1,6 +1,5 @@
 /**
- * CRMTR v5 — Container Resource Monitor
- * Real Docker only.
+ *Container Resource Monitor
  * Tabs: Overview · Live Charts · Containers · Alerts · Prediction
  *       Health · Heatmap · Network · Inspector
  */
